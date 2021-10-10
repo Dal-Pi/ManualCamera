@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/cameraListFragment">
+
+    <fragment
+        android:id="@+id/cameraListFragment"
+        android:name="com.kania.manualcamera.CameraListFragment"
+        android:label="fragment_camera_list"
+        tools:layout="@layout/fragment_camera_list" >
+        <action
+            android:id="@+id/action_cameraListFragment_to_cameraFragment"
+            app:destination="@id/cameraFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/cameraFragment"
+        android:name="com.kania.manualcamera.CameraFragment"
+        android:label="fragment_camera"
+        tools:layout="@layout/fragment_camera" >
+        <action
+            android:id="@+id/action_cameraFragment_to_permissionFragment"
+            app:destination="@id/cameraListFragment" />
+    </fragment>
+
+</navigation>
