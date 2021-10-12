@@ -25,6 +25,7 @@ class AutoFitSurfaceView @JvmOverloads constructor(
         require(width > 0 && height > 0) { "Size cannot be negative" }
         aspectRatio = width.toFloat() / height.toFloat()
         holder.setFixedSize(width, height)
+        Log.d(TAG, "surface size(${width}x${height})")
         requestLayout()
     }
 
@@ -39,7 +40,8 @@ class AutoFitSurfaceView @JvmOverloads constructor(
             // Performs center-crop transformation of the camera frames
             val newWidth: Int
             val newHeight: Int
-            val actualRatio = if (width > height) aspectRatio else 1f / aspectRatio
+//            val actualRatio = if (width > height) aspectRatio else 1f / aspectRatio
+            val actualRatio = 3.0f / 4.0f
             if (width < height * actualRatio) {
                 newHeight = height
                 newWidth = (height * actualRatio).roundToInt()

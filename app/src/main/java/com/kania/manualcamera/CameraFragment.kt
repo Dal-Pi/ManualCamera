@@ -160,13 +160,26 @@ class CameraFragment : Fragment() {
         }
 
         //TODO add CaptureCallback
-        session.setRepeatingRequest(captureRequest.build(), null, cameraHandler)
+        session.setRepeatingRequest(
+            captureRequest.build(),
+            object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult
+                ) {
+                    
+                }
+            },
+            cameraHandler
+        )
 
         fragmentCameraBinding.captureButton.setOnClickListener {
             it.isEnabled = false
 
             //TODO about dispatchers
             lifecycleScope.launch(Dispatchers.IO) {
+                /*
                 takePhoto().use { result ->
                     Log.d(TAG, "Result received: $result")
 
@@ -185,6 +198,7 @@ class CameraFragment : Fragment() {
                         //TODO view picture
                     }
                 }
+                */
 
                 it.post { it.isEnabled = true }
             }
@@ -245,6 +259,8 @@ class CameraFragment : Fragment() {
         val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
         imageReader.setOnImageAvailableListener({ reader ->
             val image = reader.acquireNextImage()
+            Log.d(TAG, "Image available in queue: ${image.timestamp}")
+            imageQueue.add(image)
         }, imageReaderHandler)
 
         //TODO what is TEMPLATE_STILL_CAPTURE?
@@ -320,6 +336,8 @@ class CameraFragment : Fragment() {
             //TODO YUV image
 
             //TODO ImageFormat.RAW_SENSOR
+            else -> {
+            }
         }
     }
 
