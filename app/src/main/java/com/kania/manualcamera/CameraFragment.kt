@@ -119,7 +119,6 @@ class CameraFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         fragmentCameraBinding.viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
-            @RequiresApi(Build.VERSION_CODES.O)
             override fun surfaceCreated(holder: SurfaceHolder) {
                 val previewSize = getPreviewOutputSize(
                     fragmentCameraBinding.viewFinder.display,
@@ -156,7 +155,6 @@ class CameraFragment : Fragment() {
     }
 
     //TODO remove annotation with reduce "min"
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun initializeCamera() = lifecycleScope.launch(Dispatchers.Main) {
         camera = openCamera(cameraManager, cameraId, cameraHandler)
 
@@ -211,12 +209,12 @@ class CameraFragment : Fragment() {
         }
 
         //TODO handle other modes
-        fragmentCameraBinding.checkIsoAuto.setOnClickListener {
+        fragmentCameraBinding.controlIso.checkIsoAuto.setOnClickListener {
             requestIso(isoValue)
-            fragmentCameraBinding.seekbarIso.progress = isoValue
+            fragmentCameraBinding.controlIso.seekbarIso.progress = isoValue
         }
 
-        fragmentCameraBinding.seekbarIso.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener{
+        fragmentCameraBinding.controlIso.seekbarIso.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener{
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 Log.d(TAG, "(test) progress = $progress")
                 isoControl = progress
@@ -227,7 +225,7 @@ class CameraFragment : Fragment() {
             }
         })
 
-        fragmentCameraBinding.seekbarIso.isEnabled = false
+        fragmentCameraBinding.controlIso.seekbarIso.isEnabled = false
     }
 
     //TODO integrate
@@ -238,14 +236,14 @@ class CameraFragment : Fragment() {
         }
 
         fragmentCameraBinding.run {
-            if (checkIsoAuto.isChecked) {
-                seekbarIso.isEnabled = false
-                textIsoControl.text = ""
+            if (controlIso.checkIsoAuto.isChecked) {
+                controlIso.seekbarIso.isEnabled = false
+                controlIso.textIsoControl.text = ""
                 //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                 captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                 Log.d(TAG, "(test) request CONTROL_AE_MODE_ON")
             } else {
-                seekbarIso.isEnabled = true
+                controlIso.seekbarIso.isEnabled = true
                 //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
                 captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
                 //captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 125L) //TODO
@@ -257,19 +255,18 @@ class CameraFragment : Fragment() {
 
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun loadControllerValuesByCharacteristics(characteristics: CameraCharacteristics) {
         val isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
         fragmentCameraBinding.run {
             //TODO whether support iso
             val min = isoRange?.lower?: 0
             val max = isoRange?.upper?: 0
-            textIsoMin.text = min.toString()
-            textIsoMax.text = max.toString()
-            progressIso.min = min
-            progressIso.max = max
-            seekbarIso.min = min
-            seekbarIso.max = max
+            controlIso.textIsoMin.text = min.toString()
+            controlIso.textIsoMax.text = max.toString()
+            controlIso.progressIso.min = min
+            controlIso.progressIso.max = max
+            controlIso.seekbarIso.min = min
+            controlIso.seekbarIso.max = max
         }
 
 
@@ -278,21 +275,21 @@ class CameraFragment : Fragment() {
     private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
-                textIsoCurrent.text = newValue.toString()
-                progressIso.progress = newValue
+                controlIso.textIsoCurrent.text = newValue.toString()
+                controlIso.progressIso.progress = newValue
             }
         }
     }
     private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
-                textIsoControl.text = newValue.toString()
+                controlIso.textIsoControl.text = newValue.toString()
             }
         }
     }
     private var isAutoAe: Boolean by Delegates.observable(false) {_, oldValue, newValue ->
         if (oldValue != newValue)
-            fragmentCameraBinding.checkIsoAuto.isChecked = newValue
+            fragmentCameraBinding.controlIso.checkIsoAuto.isChecked = newValue
     }
 
     private fun handleCaptureResult(captureResult: TotalCaptureResult) {
