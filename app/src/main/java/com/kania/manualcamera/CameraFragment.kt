@@ -13,11 +13,15 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.*
+import android.widget.CheckBox
+import android.widget.SeekBar
+import androidx.annotation.RequiresApi
 import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.kania.manualcamera.databinding.FragmentCameraBinding
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -32,6 +36,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.properties.Delegates
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -45,9 +50,6 @@ private const val ARG_PARAM2 = "param2"
  */
 class CameraFragment : Fragment() {
 
-
-
-
     // TODO: Rename and change types of parameters
     private var param1: String? = null
     private var param2: String? = null
@@ -56,6 +58,7 @@ class CameraFragment : Fragment() {
     private var cameraId = "0"
     private var imageFormat = ImageFormat.JPEG
 
+    //TODO error handling when exit cameraFragment
     private var _fragmentCameraBinding: FragmentCameraBinding? = null
     private val fragmentCameraBinding get() = _fragmentCameraBinding!!
 
@@ -84,6 +87,16 @@ class CameraFragment : Fragment() {
 
     private lateinit var relativeOrientation: OrientationLiveData
 
+    private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
+        override fun onCaptureCompleted(
+            session: CameraCaptureSession,
+            request: CaptureRequest,
+            result: TotalCaptureResult
+        ) {
+            handleCaptureResult(result)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
@@ -96,7 +109,8 @@ class CameraFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        //fragement binding
+        //TODO remove actionbar
+        //fragment binding
         _fragmentCameraBinding = FragmentCameraBinding.inflate(inflater, container, false)
         return fragmentCameraBinding.root
     }
@@ -105,6 +119,7 @@ class CameraFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         fragmentCameraBinding.viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
+            @RequiresApi(Build.VERSION_CODES.O)
             override fun surfaceCreated(holder: SurfaceHolder) {
                 val previewSize = getPreviewOutputSize(
                     fragmentCameraBinding.viewFinder.display,
@@ -140,6 +155,8 @@ class CameraFragment : Fragment() {
         }
     }
 
+    //TODO remove annotation with reduce "min"
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun initializeCamera() = lifecycleScope.launch(Dispatchers.Main) {
         camera = openCamera(cameraManager, cameraId, cameraHandler)
 
@@ -148,6 +165,8 @@ class CameraFragment : Fragment() {
             .getOutputSizes(imageFormat).maxByOrNull { it.height * it.width }!!
         imageReader = ImageReader.newInstance(
             size.width, size.height, imageFormat, IMAGE_BUFFER_SIZE)
+
+        loadControllerValuesByCharacteristics(characteristics)
 
         val targets = listOf(fragmentCameraBinding.viewFinder.holder.surface, imageReader.surface)
 
@@ -159,20 +178,7 @@ class CameraFragment : Fragment() {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
 
-        //TODO add CaptureCallback
-        session.setRepeatingRequest(
-            captureRequest.build(),
-            object : CameraCaptureSession.CaptureCallback() {
-                override fun onCaptureCompleted(
-                    session: CameraCaptureSession,
-                    request: CaptureRequest,
-                    result: TotalCaptureResult
-                ) {
-                    
-                }
-            },
-            cameraHandler
-        )
+        session.setRepeatingRequest(captureRequest.build(), captureCallback, cameraHandler)
 
         fragmentCameraBinding.captureButton.setOnClickListener {
             it.isEnabled = false
@@ -203,6 +209,100 @@ class CameraFragment : Fragment() {
                 it.post { it.isEnabled = true }
             }
         }
+
+        //TODO handle other modes
+        fragmentCameraBinding.checkIsoAuto.setOnClickListener {
+            requestIso(isoValue)
+            fragmentCameraBinding.seekbarIso.progress = isoValue
+        }
+
+        fragmentCameraBinding.seekbarIso.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener{
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                Log.d(TAG, "(test) progress = $progress")
+                isoControl = progress
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                requestIso(isoControl)
+            }
+        })
+
+        fragmentCameraBinding.seekbarIso.isEnabled = false
+    }
+
+    //TODO integrate
+    private fun requestIso(targetIso: Int) {
+        session.stopRepeating()
+        val captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+            addTarget(fragmentCameraBinding.viewFinder.holder.surface)
+        }
+
+        fragmentCameraBinding.run {
+            if (checkIsoAuto.isChecked) {
+                seekbarIso.isEnabled = false
+                textIsoControl.text = ""
+                //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                Log.d(TAG, "(test) request CONTROL_AE_MODE_ON")
+            } else {
+                seekbarIso.isEnabled = true
+                //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
+                //captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 125L) //TODO
+                captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, targetIso)
+                Log.d(TAG, "(test) request CONTROL_AE_MODE_OFF")
+            }
+            session.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraHandler)
+        }
+
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun loadControllerValuesByCharacteristics(characteristics: CameraCharacteristics) {
+        val isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+        fragmentCameraBinding.run {
+            //TODO whether support iso
+            val min = isoRange?.lower?: 0
+            val max = isoRange?.upper?: 0
+            textIsoMin.text = min.toString()
+            textIsoMax.text = max.toString()
+            progressIso.min = min
+            progressIso.max = max
+            seekbarIso.min = min
+            seekbarIso.max = max
+        }
+
+
+    }
+
+    private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                textIsoCurrent.text = newValue.toString()
+                progressIso.progress = newValue
+            }
+        }
+    }
+    private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                textIsoControl.text = newValue.toString()
+            }
+        }
+    }
+    private var isAutoAe: Boolean by Delegates.observable(false) {_, oldValue, newValue ->
+        if (oldValue != newValue)
+            fragmentCameraBinding.checkIsoAuto.isChecked = newValue
+    }
+
+    private fun handleCaptureResult(captureResult: TotalCaptureResult) {
+        val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
+            isAutoAe = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
+        }
+
     }
 
     //TODO permission
