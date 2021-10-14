@@ -21,6 +21,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.kania.manualcamera.databinding.FragmentCameraBinding
+import com.kania.manualcamera.databinding.LayoutRangeControlBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -87,6 +88,16 @@ class CameraFragment : Fragment() {
 
     private lateinit var relativeOrientation: OrientationLiveData
 
+    private val initialCaptureCallback = object : CameraCaptureSession.CaptureCallback() {
+        override fun onCaptureCompleted(
+            session: CameraCaptureSession,
+            request: CaptureRequest,
+            result: TotalCaptureResult
+        ) {
+            handleInitialCaptureRequest(result)
+        }
+    }
+
     private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(
             session: CameraCaptureSession,
@@ -94,6 +105,34 @@ class CameraFragment : Fragment() {
             result: TotalCaptureResult
         ) {
             handleCaptureResult(result)
+        }
+    }
+
+    //values
+    private var isoAuto: Boolean by Delegates.observable(false) {_, oldValue, newValue ->
+        fragmentCameraBinding.run {
+            controlIso.seekbarControl.isEnabled = !newValue
+            if (!newValue) {
+                controlIso.seekbarControl.progress = isoValue
+                isoControl = isoValue
+            } else {
+                controlIso.textControl.text = ""
+            }
+        }
+    }
+    private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlIso.textControl.text = newValue.toString()
+            }
+        }
+    }
+    private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlIso.textCurrent.text = newValue.toString()
+                controlIso.progressCurrent.progress = newValue
+            }
         }
     }
 
@@ -176,7 +215,9 @@ class CameraFragment : Fragment() {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
 
-        session.setRepeatingRequest(captureRequest.build(), captureCallback, cameraHandler)
+        val request = captureRequest.build()
+        session.capture(request, initialCaptureCallback, cameraHandler)
+        session.setRepeatingRequest(request, captureCallback, cameraHandler)
 
         fragmentCameraBinding.captureButton.setOnClickListener {
             it.isEnabled = false
@@ -208,96 +249,103 @@ class CameraFragment : Fragment() {
             }
         }
 
-        //TODO handle other modes
-        fragmentCameraBinding.controlIso.checkIsoAuto.setOnClickListener {
-            requestIso(isoValue)
-            fragmentCameraBinding.controlIso.seekbarIso.progress = isoValue
-        }
-
-        fragmentCameraBinding.controlIso.seekbarIso.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener{
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                Log.d(TAG, "(test) progress = $progress")
-                isoControl = progress
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                requestIso(isoControl)
-            }
-        })
-
-        fragmentCameraBinding.controlIso.seekbarIso.isEnabled = false
     }
 
     //TODO integrate
-    private fun requestIso(targetIso: Int) {
+    private fun changeRequest() {
         session.stopRepeating()
         val captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
 
-        fragmentCameraBinding.run {
-            if (controlIso.checkIsoAuto.isChecked) {
-                controlIso.seekbarIso.isEnabled = false
-                controlIso.textIsoControl.text = ""
-                //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-                Log.d(TAG, "(test) request CONTROL_AE_MODE_ON")
-            } else {
-                controlIso.seekbarIso.isEnabled = true
-                //captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
-                //captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 125L) //TODO
-                captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, targetIso)
-                Log.d(TAG, "(test) request CONTROL_AE_MODE_OFF")
-            }
-            session.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraHandler)
+        //ISO
+        if (isoAuto) {
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+//            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+            Log.d(TAG, "(test) request CONTROL_AE_MODE_ON")
+        } else {
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+//            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, isoControl)
+            //captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 125L) //TODO
+            Log.d(TAG, "(test) request CONTROL_AE_MODE_OFF, isoControl=$isoControl")
         }
 
+        //TODO others
+
+        session.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraHandler)
     }
 
     private fun loadControllerValuesByCharacteristics(characteristics: CameraCharacteristics) {
         val isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
         fragmentCameraBinding.run {
             //TODO whether support iso
-            val min = isoRange?.lower?: 0
-            val max = isoRange?.upper?: 0
-            controlIso.textIsoMin.text = min.toString()
-            controlIso.textIsoMax.text = max.toString()
-            controlIso.progressIso.min = min
-            controlIso.progressIso.max = max
-            controlIso.seekbarIso.min = min
-            controlIso.seekbarIso.max = max
-        }
+            val min = isoRange?.lower ?: 0
+            val max = isoRange?.upper ?: 0
 
-
-    }
-
-    private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            fragmentCameraBinding.run {
-                controlIso.textIsoCurrent.text = newValue.toString()
-                controlIso.progressIso.progress = newValue
-            }
-        }
-    }
-    private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            fragmentCameraBinding.run {
-                controlIso.textIsoControl.text = newValue.toString()
-            }
+            setIntRangeController(controlIso, "ISO", min, max,
+                {
+                    isoAuto = controlIso.checkAuto.isChecked
+                    changeRequest()
+                },
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        controlIso.textControl.text = progress.toString()
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        isoControl = seekBar?.progress ?: 0
+                        changeRequest()
+                    }
+                }
+            )
         }
     }
-    private var isAutoAe: Boolean by Delegates.observable(false) {_, oldValue, newValue ->
-        if (oldValue != newValue)
-            fragmentCameraBinding.controlIso.checkIsoAuto.isChecked = newValue
+
+    private fun setIntRangeController(
+        layout: LayoutRangeControlBinding,
+        title: String,
+        min: Int,
+        max: Int,
+        autoListener: View.OnClickListener,
+        seekbarListener: SeekBar.OnSeekBarChangeListener) {
+        layout.run{
+            textTitle.text = title
+            textMin.text = min.toString()
+            textMax.text = max.toString()
+            progressCurrent.min = min
+            progressCurrent.max = max
+            seekbarControl.min = min
+            seekbarControl.max = max
+
+            checkAuto.setOnClickListener(autoListener)
+            seekbarControl.setOnSeekBarChangeListener(seekbarListener)
+            seekbarControl.isEnabled = false
+        }
+    }
+
+    private fun handleInitialCaptureRequest(captureResult: TotalCaptureResult) {
+        val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            //ISO
+            isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
+            isoAuto = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
+            fragmentCameraBinding.controlIso.checkAuto.isChecked = isoAuto
+            Log.d(TAG, "(test) handleInitialCaptureRequest")
+        }
+
     }
 
     private fun handleCaptureResult(captureResult: TotalCaptureResult) {
         val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
 
+
         CoroutineScope(Dispatchers.Main).launch {
+            //ISO
             isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
-            isAutoAe = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
+            //TODO change
+            //isoAuto = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
         }
 
     }
