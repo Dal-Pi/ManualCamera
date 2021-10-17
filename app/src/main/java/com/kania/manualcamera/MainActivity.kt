@@ -11,13 +11,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         //setupActionBarWithNavController(findNavController(R.id.fragmentContainer))
-        setupActionBarWithNavController(
-            (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as NavHostFragment)
-                .navController)
+//        setupActionBarWithNavController(
+//            (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as NavHostFragment)
+//                .navController)
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        val navController = (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as NavHostFragment).navController
-        return navController.navigateUp() || super.onSupportNavigateUp()
-    }
+//    override fun onSupportNavigateUp(): Boolean {
+//        val navController = (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as NavHostFragment).navController
+//        return navController.navigateUp() || super.onSupportNavigateUp()
+//    }
 }

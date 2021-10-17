@@ -10,31 +10,21 @@
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/textTitleIso"
+            android:id="@+id/textTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="ISO"
+            android:text="title"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/textIsoCurrent"
+            android:id="@+id/textCurrent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="current"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
-            app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <androidx.appcompat.widget.AppCompatCheckBox
-            android:id="@+id/checkIsoAuto"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="0dp"
-            android:text="Auto"
-            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
@@ -44,7 +34,7 @@
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/textIsoMin"
+            android:id="@+id/textMin"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="min"
@@ -57,12 +47,12 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintLeft_toRightOf="@id/textIsoMin"
-            app:layout_constraintRight_toLeftOf="@id/textIsoMax"
+            app:layout_constraintLeft_toRightOf="@id/textMin"
+            app:layout_constraintRight_toLeftOf="@id/textMax"
             app:layout_constraintTop_toTopOf="parent">
 
             <androidx.core.widget.ContentLoadingProgressBar
-                android:id="@+id/progressIso"
+                android:id="@+id/progressCurrent"
                 style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -71,13 +61,13 @@
                 app:layout_constraintHorizontal_weight="1" />
 
             <androidx.appcompat.widget.AppCompatSeekBar
-                android:id="@+id/seekbarIso"
+                android:id="@+id/seekbarControl"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
         </androidx.appcompat.widget.LinearLayoutCompat>
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/textIsoMax"
+            android:id="@+id/textMax"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="max"
@@ -92,7 +82,7 @@
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/textIsoControl"
+            android:id="@+id/textControl"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text=""
@@ -101,5 +91,10 @@
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#DDDDDD"/>
 
 </androidx.appcompat.widget.LinearLayoutCompat>

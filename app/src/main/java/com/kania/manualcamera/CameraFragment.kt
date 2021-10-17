@@ -13,23 +13,21 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.*
-import android.widget.CheckBox
-import android.widget.SeekBar
+import android.widget.*
 import androidx.annotation.RequiresApi
 import androidx.exifinterface.media.ExifInterface
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.kania.manualcamera.databinding.FragmentCameraBinding
+import com.kania.manualcamera.databinding.LayoutModeControlBinding
 import com.kania.manualcamera.databinding.LayoutRangeControlBinding
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.*
 import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.Runnable
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -109,29 +107,90 @@ class CameraFragment : Fragment() {
     }
 
     //values
-    private var isoAuto: Boolean by Delegates.observable(false) {_, oldValue, newValue ->
-        fragmentCameraBinding.run {
-            controlIso.seekbarControl.isEnabled = !newValue
-            if (!newValue) {
-                controlIso.seekbarControl.progress = isoValue
-                isoControl = isoValue
-            } else {
-                controlIso.textControl.text = ""
+    private var isValueSet = false
+
+    //CONTROL_MODE
+    private val modes = mapOf(
+        CameraCharacteristics.CONTROL_MODE_OFF to "OFF",
+        CameraCharacteristics.CONTROL_MODE_AUTO to "AUTO",
+        CameraCharacteristics.CONTROL_MODE_USE_SCENE_MODE to "USE_SCENE_MODE",
+        CameraCharacteristics.CONTROL_MODE_OFF_KEEP_STATE to "OFF_KEEP_STATE",
+        //CameraCharacteristics.CONTROL_MODE_USE_EXTENDED_SCENE_MODE to "EXTENDED_SCENE_MODE",
+    )
+    private var modeValue: Int by Delegates.observable(-1) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlMode.textCurrent.text = modes[newValue]
+            }
+        }
+    }
+    private var modeControl: Int = CameraCharacteristics.CONTROL_MODE_OFF
+
+    //CONTROL_AE_MODE
+    private val aeModes = mapOf(
+        CameraCharacteristics.CONTROL_AE_MODE_OFF to "OFF",
+        CameraCharacteristics.CONTROL_AE_MODE_ON to "ON",
+        CameraCharacteristics.CONTROL_AE_MODE_ON_AUTO_FLASH to "ON_AUTO_FLASH",
+        CameraCharacteristics.CONTROL_AE_MODE_ON_ALWAYS_FLASH to "ON_ALWAYS_FLASH",
+        CameraCharacteristics.CONTROL_AE_MODE_ON_AUTO_FLASH_REDEYE to "ON_AUTO_FLASH_REDEYE",
+        //CameraCharacteristics.CONTROL_AE_MODE_ON_EXTERNAL_FLASH to "ON_EXTERNAL_FLASH",
+    )
+    private var aeModeValue: Int by Delegates.observable(-1) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlAeMode.textCurrent.text = aeModes[newValue]
+            }
+        }
+    }
+    private var aeModeControl: Int = 0
+
+    //SENSOR_SENSITIVITY
+    private var isoValue: Int by Delegates.observable(80) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlSensorSensitivity.textCurrent.text = newValue.toString()
+                controlSensorSensitivity.progressCurrent.progress = newValue
             }
         }
     }
     private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
-                controlIso.textControl.text = newValue.toString()
+                controlSensorSensitivity.textControl.text = newValue.toString()
             }
         }
     }
-    private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
+
+    //SENSOR_EXPOSURE_TIME
+    private var exposureTimeValue: Long by Delegates.observable(80) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
-                controlIso.textCurrent.text = newValue.toString()
-                controlIso.progressCurrent.progress = newValue
+                controlSensorExposureTime.textCurrent.text = newValue.toString()
+                controlSensorExposureTime.progressCurrent.progress = newValue.toInt() //TODO
+            }
+        }
+    }
+    private var exposureTimeControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlSensorExposureTime.textControl.text = newValue.toString()
+            }
+        }
+    }
+
+    //CONTROL_AE_EXPOSURE_COMPENSATION
+    private var exposureCompensationValue: Int by Delegates.observable(80) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlAeExposureCompensation.textCurrent.text = newValue.toString()
+                controlAeExposureCompensation.progressCurrent.progress = newValue.toInt()
+            }
+        }
+    }
+    private var exposureCompensationControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlAeExposureCompensation.textControl.text = newValue.toString()
             }
         }
     }
@@ -210,14 +269,32 @@ class CameraFragment : Fragment() {
         session = createCaptureSession(camera, targets, cameraHandler)
 
         val captureRequest = camera.createCaptureRequest(
-            CameraDevice.TEMPLATE_PREVIEW
+            CameraDevice.TEMPLATE_STILL_CAPTURE
         ).apply {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
 
         val request = captureRequest.build()
         session.capture(request, initialCaptureCallback, cameraHandler)
-        session.setRepeatingRequest(request, captureCallback, cameraHandler)
+
+
+        fragmentCameraBinding.run {
+            setModeController(controlMode, "3A_MODE: ", modes.values.toList(), object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    modeControl = position //TODO arrange
+                    changeRequest()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            })
+
+            setModeController(controlAeMode, "AE_MODE: ", aeModes.values.toList(), object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    aeModeControl = position //TODO arrange
+                    changeRequest()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            })
+        }
 
         fragmentCameraBinding.captureButton.setOnClickListener {
             it.isEnabled = false
@@ -258,20 +335,13 @@ class CameraFragment : Fragment() {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
 
-        //ISO
-        if (isoAuto) {
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-//            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-            Log.d(TAG, "(test) request CONTROL_AE_MODE_ON")
-        } else {
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-//            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
+        if (isValueSet) {
+            captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, modeControl)
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, aeModeControl)
             captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, isoControl)
-            //captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 1_000_000_000L / 125L) //TODO
-            Log.d(TAG, "(test) request CONTROL_AE_MODE_OFF, isoControl=$isoControl")
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTimeControl.toLong())
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, exposureCompensationControl)
         }
-
-        //TODO others
 
         session.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraHandler)
     }
@@ -279,18 +349,13 @@ class CameraFragment : Fragment() {
     private fun loadControllerValuesByCharacteristics(characteristics: CameraCharacteristics) {
         val isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
         fragmentCameraBinding.run {
-            //TODO whether support iso
             val min = isoRange?.lower ?: 0
             val max = isoRange?.upper ?: 0
 
-            setIntRangeController(controlIso, "ISO", min, max,
-                {
-                    isoAuto = controlIso.checkAuto.isChecked
-                    changeRequest()
-                },
+            setIntRangeController(controlSensorSensitivity, "ISO", min, max,
                 object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        controlIso.textControl.text = progress.toString()
+                        controlSensorSensitivity.textControl.text = progress.toString()
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {
@@ -300,6 +365,56 @@ class CameraFragment : Fragment() {
                 }
             )
         }
+
+        val expoureTimeRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        fragmentCameraBinding.run {
+            val min = expoureTimeRange?.lower ?: 0
+            val max = expoureTimeRange?.upper ?: 0
+
+            setIntRangeController(controlSensorExposureTime, "Exposure Time", min.toInt(), max.toInt(),
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        controlSensorExposureTime.textControl.text = progress.toString()
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        exposureTimeControl = seekBar?.progress ?: 0
+                        changeRequest()
+                    }
+                }
+            )
+        }
+
+        val exposureCompensationRange = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)
+        fragmentCameraBinding.run {
+            val min = exposureCompensationRange?.lower ?: 0
+            val max = exposureCompensationRange?.upper ?: 0
+
+            setIntRangeController(controlAeExposureCompensation, "Exposure Compensation", min.toInt(), max.toInt(),
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        controlAeExposureCompensation.textControl.text = progress.toString()
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        exposureCompensationControl = seekBar?.progress ?: 0
+                        changeRequest()
+                    }
+                }
+            )
+        }
+    }
+
+    private fun setModeController(
+        layout: LayoutModeControlBinding,
+        title: String,
+        data: List<String>,
+        itemSelectedListener: AdapterView.OnItemSelectedListener
+    ) {
+        layout.textTitle.text = title
+        layout.spinnerMode.adapter =
+            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, data)
+        layout.spinnerMode.onItemSelectedListener = itemSelectedListener
     }
 
     private fun setIntRangeController(
@@ -307,7 +422,6 @@ class CameraFragment : Fragment() {
         title: String,
         min: Int,
         max: Int,
-        autoListener: View.OnClickListener,
         seekbarListener: SeekBar.OnSeekBarChangeListener) {
         layout.run{
             textTitle.text = title
@@ -318,9 +432,7 @@ class CameraFragment : Fragment() {
             seekbarControl.min = min
             seekbarControl.max = max
 
-            checkAuto.setOnClickListener(autoListener)
             seekbarControl.setOnSeekBarChangeListener(seekbarListener)
-            seekbarControl.isEnabled = false
         }
     }
 
@@ -329,12 +441,20 @@ class CameraFragment : Fragment() {
 
         CoroutineScope(Dispatchers.Main).launch {
             //ISO
+            modeValue = captureResult.get(CaptureResult.CONTROL_MODE)?: -1
+            fragmentCameraBinding.controlMode.spinnerMode.setSelection(modeValue)
+            aeModeValue = captureResult.get(CaptureResult.CONTROL_AE_MODE)?: -1
+            fragmentCameraBinding.controlAeMode.spinnerMode.setSelection(aeModeValue)
+
             isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
-            isoAuto = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
-            fragmentCameraBinding.controlIso.checkAuto.isChecked = isoAuto
+            exposureTimeValue = captureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME)?: -1L
+            exposureCompensationControl = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
+
+            isValueSet = true
+
             Log.d(TAG, "(test) handleInitialCaptureRequest")
         }
-
+        changeRequest()
     }
 
     private fun handleCaptureResult(captureResult: TotalCaptureResult) {
@@ -342,6 +462,13 @@ class CameraFragment : Fragment() {
 
 
         CoroutineScope(Dispatchers.Main).launch {
+            modeValue = captureResult.get(CaptureResult.CONTROL_MODE)?: -1
+            aeModeValue = captureResult.get(CaptureResult.CONTROL_AE_MODE)?: -1
+
+            isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
+            exposureTimeValue = captureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME)?: -1L
+            exposureCompensationValue = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
+
             //ISO
             isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
             //TODO change

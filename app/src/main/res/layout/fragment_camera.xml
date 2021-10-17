@@ -54,9 +54,20 @@
             android:layout_height="match_parent"
             android:orientation="vertical">
 
-            <include layout="@layout/layout_range_control"
-                android:id="@+id/control_iso"/>
+            <include layout="@layout/layout_mode_control"
+                android:id="@+id/control_mode"/>
 
+            <include layout="@layout/layout_mode_control"
+                android:id="@+id/control_ae_mode"/>
+
+            <include layout="@layout/layout_range_control"
+                android:id="@+id/control_sensor_sensitivity"/>
+
+            <include layout="@layout/layout_range_control"
+                android:id="@+id/control_sensor_exposure_time"/>
+
+            <include layout="@layout/layout_range_control"
+                android:id="@+id/control_ae_exposure_compensation"/>
 
             <View
                 android:layout_width="match_parent"
