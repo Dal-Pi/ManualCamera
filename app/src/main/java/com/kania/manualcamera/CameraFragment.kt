@@ -195,6 +195,42 @@ class CameraFragment : Fragment() {
         }
     }
 
+    //CONTROL_AF_MODE
+    private val afModes = mapOf(
+        CameraCharacteristics.CONTROL_AF_MODE_OFF to "OFF",
+        CameraCharacteristics.CONTROL_AF_MODE_AUTO to "AUTO",
+        CameraCharacteristics.CONTROL_AF_MODE_MACRO to "MACRO",
+        CameraCharacteristics.CONTROL_AF_MODE_CONTINUOUS_VIDEO to "CONTINUOUS_VIDEO",
+        CameraCharacteristics.CONTROL_AF_MODE_CONTINUOUS_PICTURE to "CONTINUOUS_PICTURE",
+        CameraCharacteristics.CONTROL_AF_MODE_EDOF to "EDOF",
+    )
+    private var afModeValue: Int by Delegates.observable(-1) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlAfMode.textCurrent.text = afModes[newValue]
+            }
+        }
+    }
+    private var afModeControl: Int = 0
+
+    //LENS_FOCUS_DISTANCE
+    private val focusStep = 10_000_000f
+    private var focusDistanceValue: Float by Delegates.observable(0f) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlLensFocusDistance.textCurrent.text = newValue.toString()
+                controlLensFocusDistance.progressCurrent.progress = (newValue*focusStep).toInt()
+            }
+        }
+    }
+    private var focusDistanceControl: Float by Delegates.observable(0f) { _, oldValue, newValue ->
+        if (oldValue != newValue) {
+            fragmentCameraBinding.run {
+                controlSensorExposureTime.textControl.text = newValue.toString()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
@@ -269,7 +305,7 @@ class CameraFragment : Fragment() {
         session = createCaptureSession(camera, targets, cameraHandler)
 
         val captureRequest = camera.createCaptureRequest(
-            CameraDevice.TEMPLATE_STILL_CAPTURE
+            CameraDevice.TEMPLATE_PREVIEW
         ).apply {
             addTarget(fragmentCameraBinding.viewFinder.holder.surface)
         }
@@ -290,6 +326,14 @@ class CameraFragment : Fragment() {
             setModeController(controlAeMode, "AE_MODE: ", aeModes.values.toList(), object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     aeModeControl = position //TODO arrange
+                    changeRequest()
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            })
+
+            setModeController(controlAfMode, "AF_MODE: ", afModes.values.toList(), object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    afModeControl = position //TODO arrange
                     changeRequest()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -341,6 +385,8 @@ class CameraFragment : Fragment() {
             captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, isoControl)
             captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTimeControl.toLong())
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, exposureCompensationControl)
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeControl)
+            captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistanceControl)
         }
 
         session.setRepeatingRequest(captureRequestBuilder.build(), captureCallback, cameraHandler)
@@ -403,6 +449,27 @@ class CameraFragment : Fragment() {
                 }
             )
         }
+
+        val minimumFocusDistance = characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)?: 0.0f
+        fragmentCameraBinding.run {
+            //TODO arrange number
+            val min = 0
+            val max = (minimumFocusDistance * focusStep).toInt()
+
+            setFloatRangeController(controlLensFocusDistance, "Lens Focus Distance", min, max, focusStep,
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        controlLensFocusDistance.textControl.text = (progress / focusStep).toString()
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        val progressValue = seekBar?.progress ?: 0
+                        focusDistanceControl = progressValue / focusStep
+                        changeRequest()
+                    }
+                }
+            )
+        }
     }
 
     private fun setModeController(
@@ -436,6 +503,26 @@ class CameraFragment : Fragment() {
         }
     }
 
+    private fun setFloatRangeController(
+        layout: LayoutRangeControlBinding,
+        title: String,
+        min: Int,
+        max: Int,
+        div: Float,
+        seekbarListener: SeekBar.OnSeekBarChangeListener) {
+        layout.run{
+            textTitle.text = title
+            textMin.text = (min/div).toString()
+            textMax.text = (max/div).toString()
+            progressCurrent.min = min
+            progressCurrent.max = max
+            seekbarControl.min = min
+            seekbarControl.max = max
+
+            seekbarControl.setOnSeekBarChangeListener(seekbarListener)
+        }
+    }
+
     private fun handleInitialCaptureRequest(captureResult: TotalCaptureResult) {
         val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
 
@@ -459,6 +546,15 @@ class CameraFragment : Fragment() {
             exposureCompensationValue = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
             exposureCompensationControl = exposureCompensationValue
             fragmentCameraBinding.controlAeExposureCompensation.seekbarControl.progress = exposureCompensationControl
+
+            //TODO ***** af states
+            afModeValue = captureResult.get(CaptureResult.CONTROL_AF_MODE)?: -1
+            fragmentCameraBinding.controlAfMode.spinnerMode.setSelection(afModeValue)
+
+            focusDistanceValue = captureResult.get(CaptureResult.LENS_FOCUS_DISTANCE)?: 0.0f
+            focusDistanceControl = focusDistanceValue
+            fragmentCameraBinding.controlLensFocusDistance.seekbarControl.progress = (focusDistanceControl * focusStep).toInt()
+
             isValueSet = true
 
             Log.d(TAG, "(test) handleInitialCaptureRequest")
@@ -473,15 +569,11 @@ class CameraFragment : Fragment() {
         CoroutineScope(Dispatchers.Main).launch {
             modeValue = captureResult.get(CaptureResult.CONTROL_MODE)?: -1
             aeModeValue = captureResult.get(CaptureResult.CONTROL_AE_MODE)?: -1
-
             isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
             exposureTimeValue = captureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME)?: -1L
             exposureCompensationValue = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
-
-            //ISO
-            isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
-            //TODO change
-            //isoAuto = (captureResult.get(CaptureResult.CONTROL_AE_MODE) == CaptureResult.CONTROL_AE_MODE_ON)
+            afModeValue = captureResult.get(CaptureResult.CONTROL_AF_MODE)?: -1
+            focusDistanceValue = captureResult.get(CaptureResult.LENS_FOCUS_DISTANCE)?: 0.0f
         }
 
     }

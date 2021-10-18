@@ -69,6 +69,12 @@
             <include layout="@layout/layout_range_control"
                 android:id="@+id/control_ae_exposure_compensation"/>
 
+            <include layout="@layout/layout_mode_control"
+                android:id="@+id/control_af_mode"/>
+
+            <include layout="@layout/layout_range_control"
+                android:id="@+id/control_lens_focus_distance"/>
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="500dp" />
