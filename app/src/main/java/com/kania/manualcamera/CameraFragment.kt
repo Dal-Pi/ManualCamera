@@ -145,7 +145,7 @@ class CameraFragment : Fragment() {
     private var aeModeControl: Int = 0
 
     //SENSOR_SENSITIVITY
-    private var isoValue: Int by Delegates.observable(80) { _, oldValue, newValue ->
+    private var isoValue: Int by Delegates.observable(0) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
                 controlSensorSensitivity.textCurrent.text = newValue.toString()
@@ -162,7 +162,7 @@ class CameraFragment : Fragment() {
     }
 
     //SENSOR_EXPOSURE_TIME
-    private var exposureTimeValue: Long by Delegates.observable(80) { _, oldValue, newValue ->
+    private var exposureTimeValue: Long by Delegates.observable(0) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
                 controlSensorExposureTime.textCurrent.text = newValue.toString()
@@ -179,7 +179,7 @@ class CameraFragment : Fragment() {
     }
 
     //CONTROL_AE_EXPOSURE_COMPENSATION
-    private var exposureCompensationValue: Int by Delegates.observable(80) { _, oldValue, newValue ->
+    private var exposureCompensationValue: Int by Delegates.observable(-1) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
                 controlAeExposureCompensation.textCurrent.text = newValue.toString()
@@ -441,15 +441,24 @@ class CameraFragment : Fragment() {
 
         CoroutineScope(Dispatchers.Main).launch {
             //ISO
+            //TODO separate saveValues()
             modeValue = captureResult.get(CaptureResult.CONTROL_MODE)?: -1
             fragmentCameraBinding.controlMode.spinnerMode.setSelection(modeValue)
+
             aeModeValue = captureResult.get(CaptureResult.CONTROL_AE_MODE)?: -1
             fragmentCameraBinding.controlAeMode.spinnerMode.setSelection(aeModeValue)
 
             isoValue = captureResult.get(CaptureResult.SENSOR_SENSITIVITY)?: -1
-            exposureTimeValue = captureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME)?: -1L
-            exposureCompensationControl = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
+            isoControl = isoValue
+            fragmentCameraBinding.controlSensorSensitivity.seekbarControl.progress = isoControl
 
+            exposureTimeValue = captureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME)?: -1L
+            exposureTimeControl = exposureTimeValue.toInt()
+            fragmentCameraBinding.controlSensorExposureTime.seekbarControl.progress = exposureTimeControl
+
+            exposureCompensationValue = captureResult.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION)?: -1
+            exposureCompensationControl = exposureCompensationValue
+            fragmentCameraBinding.controlAeExposureCompensation.seekbarControl.progress = exposureCompensationControl
             isValueSet = true
 
             Log.d(TAG, "(test) handleInitialCaptureRequest")
