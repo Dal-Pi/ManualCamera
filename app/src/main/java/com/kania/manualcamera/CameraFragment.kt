@@ -153,13 +153,7 @@ class CameraFragment : Fragment() {
             }
         }
     }
-    private var isoControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            fragmentCameraBinding.run {
-                controlSensorSensitivity.textControl.text = newValue.toString()
-            }
-        }
-    }
+    private var isoControl = 0
 
     //SENSOR_EXPOSURE_TIME
     private var exposureTimeValue: Long by Delegates.observable(0) { _, oldValue, newValue ->
@@ -170,13 +164,7 @@ class CameraFragment : Fragment() {
             }
         }
     }
-    private var exposureTimeControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            fragmentCameraBinding.run {
-                controlSensorExposureTime.textControl.text = newValue.toString()
-            }
-        }
-    }
+    private var exposureTimeControl = 0
 
     //CONTROL_AE_EXPOSURE_COMPENSATION
     private var exposureCompensationValue: Int by Delegates.observable(-1) { _, oldValue, newValue ->
@@ -187,13 +175,7 @@ class CameraFragment : Fragment() {
             }
         }
     }
-    private var exposureCompensationControl: Int by Delegates.observable(0) { _, oldValue, newValue ->
-        if (oldValue != newValue) {
-            fragmentCameraBinding.run {
-                controlAeExposureCompensation.textControl.text = newValue.toString()
-            }
-        }
-    }
+    private var exposureCompensationControl = 0
 
     //CONTROL_AF_MODE
     private val afModes = mapOf(
@@ -226,7 +208,7 @@ class CameraFragment : Fragment() {
     private var focusDistanceControl: Float by Delegates.observable(0f) { _, oldValue, newValue ->
         if (oldValue != newValue) {
             fragmentCameraBinding.run {
-                controlSensorExposureTime.textControl.text = newValue.toString()
+                controlLensFocusDistance.textControl.text = newValue.toString()
             }
         }
     }
@@ -526,6 +508,8 @@ class CameraFragment : Fragment() {
     private fun handleInitialCaptureRequest(captureResult: TotalCaptureResult) {
         val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
 
+        if (_fragmentCameraBinding == null) return
+
         CoroutineScope(Dispatchers.Main).launch {
             //ISO
             //TODO separate saveValues()
@@ -565,6 +549,7 @@ class CameraFragment : Fragment() {
     private fun handleCaptureResult(captureResult: TotalCaptureResult) {
         val timestamp = captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
 
+        if (_fragmentCameraBinding == null) return
 
         CoroutineScope(Dispatchers.Main).launch {
             modeValue = captureResult.get(CaptureResult.CONTROL_MODE)?: -1
@@ -713,6 +698,8 @@ class CameraFragment : Fragment() {
             }
         }
     }
+
+    //TODO onresume
 
     override fun onStop() {
         super.onStop()
